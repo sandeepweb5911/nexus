@@ -1,0 +1,7 @@
+{
+  "name": "AI Nexus",
+  "description": "Evaluate capabilities, benchmarks, pricing, and integrations before choosing your computational stack with AI Nexus.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
+
