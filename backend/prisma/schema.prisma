@@ -1,0 +1,269 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+enum Role {
+  USER
+  ADMIN
+  SUPER_ADMIN
+}
+
+enum SubmissionStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum PricingModel {
+  FREE
+  FREEMIUM
+  PAID
+  SUBSCRIPTION
+  OPEN_WEIGHTS
+  CONTACT_SALES
+}
+
+model User {
+  id           String         @id @default(uuid())
+  email        String         @unique
+  passwordHash String
+  name         String?
+  role         Role           @default(USER)
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+
+  reviews      Review[]
+  favorites    Favorite[]
+  comparisons  Comparison[]
+  collections  Collection[]
+  submissions  ToolSubmission[]
+
+  @@index([email])
+}
+
+model AITool {
+  id                 String         @id @default(uuid())
+  slug               String         @unique
+  name               String
+  provider           String
+  icon               String         @default("smart_toy")
+  colorTheme         String         @default("primary")
+  tag                String         @default("Frontier")
+  primaryUseCase     String
+  description        String
+  websiteUrl         String
+  priceMonthly       String         @default("$20/mo")
+  priceRaw           Float          @default(20.0)
+  pricingModel       PricingModel   @default(FREEMIUM)
+  pricingModelEntry  String         @default("$20/mo")
+  freeTierLimits     String         @default("Limited trial")
+  contextTokens      String         @default("128K tokens")
+  contextWords       String         @default("~96K words")
+  contextHighlight   Boolean        @default(false)
+  contextBadge       String?
+  sweBenchScore      Float          @default(0.0)
+  sweBenchNote       String         @default("Verified benchmark")
+  multimodal         String         @default("Text, Code, Vision")
+  multimodalSub      String         @default("Full multimodal native")
+  multimodalHighlight Boolean       @default(false)
+  apiRates           String         @default("$3.00 / 1M input")
+  apiRatesSub        String         @default("$15.00 / 1M output")
+  privacy            String         @default("Enterprise Zero Retention")
+  privacyVerified    Boolean        @default(true)
+  platforms          String         @default("Web, Mac, Windows, Linux")
+  rating             Float          @default(4.8)
+  reviewsCount       Int            @default(0)
+  featured           Boolean        @default(false)
+  trending           Boolean        @default(false)
+  viewCount          Int            @default(0)
+  clickCount         Int            @default(0)
+  createdAt          DateTime       @default(now())
+  updatedAt          DateTime       @updatedAt
+
+  categories         ToolCategory[]
+  reviews            Review[]
+  favorites          Favorite[]
+  comparisons        Comparison[]
+  collectionTools    CollectionTool[]
+  deals              Deal[]
+  views              ToolView[]
+  clicks             ToolClick[]
+
+  @@index([slug])
+  @@index([name])
+  @@index([provider])
+  @@index([rating])
+  @@index([featured])
+  @@index([trending])
+}
+
+model Category {
+  id          String         @id @default(uuid())
+  slug        String         @unique
+  name        String
+  description String?
+  icon        String?
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+
+  tools       ToolCategory[]
+
+  @@index([slug])
+}
+
+model ToolCategory {
+  id         String   @id @default(uuid())
+  toolId     String
+  categoryId String
+  createdAt  DateTime @default(now())
+
+  tool       AITool   @relation(fields: [toolId], references: [id], onDelete: Cascade)
+  category   Category @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+
+  @@unique([toolId, categoryId])
+  @@index([toolId])
+  @@index([categoryId])
+}
+
+model Review {
+  id        String   @id @default(uuid())
+  userId    String
+  toolId    String
+  rating    Int      // 1 to 5
+  title     String?
+  comment   String
+  helpful   Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tool      AITool   @relation(fields: [toolId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, toolId])
+  @@index([toolId])
+  @@index([userId])
+}
+
+model Favorite {
+  id        String   @id @default(uuid())
+  userId    String
+  toolId    String
+  createdAt DateTime @default(now())
+
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tool      AITool   @relation(fields: [toolId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, toolId])
+  @@index([userId])
+  @@index([toolId])
+}
+
+model Comparison {
+  id        String   @id @default(uuid())
+  userId    String?
+  toolId    String
+  sessionId String?
+  createdAt DateTime @default(now())
+
+  user      User?    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tool      AITool   @relation(fields: [toolId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([sessionId])
+}
+
+model Collection {
+  id          String           @id @default(uuid())
+  userId      String
+  name        String
+  description String?
+  isPublic    Boolean          @default(false)
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+
+  user        User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tools       CollectionTool[]
+
+  @@index([userId])
+}
+
+model CollectionTool {
+  id           String     @id @default(uuid())
+  collectionId String
+  toolId       String
+  addedAt      DateTime   @default(now())
+
+  collection   Collection @relation(fields: [collectionId], references: [id], onDelete: Cascade)
+  tool         AITool     @relation(fields: [toolId], references: [id], onDelete: Cascade)
+
+  @@unique([collectionId, toolId])
+}
+
+model Deal {
+  id          String    @id @default(uuid())
+  toolId      String
+  title       String
+  description String
+  discount    String
+  couponCode  String?
+  url         String
+  startsAt    DateTime  @default(now())
+  expiresAt   DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  tool        AITool    @relation(fields: [toolId], references: [id], onDelete: Cascade)
+
+  @@index([toolId])
+}
+
+model ToolSubmission {
+  id           String           @id @default(uuid())
+  userId       String?
+  name         String
+  url          String
+  domain       String
+  pricingModel String
+  description  String?
+  email        String?
+  status       SubmissionStatus @default(PENDING)
+  notes        String?
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
+
+  user         User?            @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([status])
+  @@index([userId])
+}
+
+model ToolView {
+  id        String   @id @default(uuid())
+  toolId    String
+  ipAddress String?
+  userAgent String?
+  createdAt DateTime @default(now())
+
+  tool      AITool   @relation(fields: [toolId], references: [id], onDelete: Cascade)
+
+  @@index([toolId])
+  @@index([createdAt])
+}
+
+model ToolClick {
+  id        String   @id @default(uuid())
+  toolId    String
+  ipAddress String?
+  referrer  String?
+  createdAt DateTime @default(now())
+
+  tool      AITool   @relation(fields: [toolId], references: [id], onDelete: Cascade)
+
+  @@index([toolId])
+  @@index([createdAt])
+}

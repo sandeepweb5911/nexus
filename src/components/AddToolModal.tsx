@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { AITool } from '../types';
 import { CATALOG_TOOLS } from '../data/toolsData';
+import api from '../lib/api';
 
 interface AddToolModalProps {
   isOpen: boolean;
@@ -17,18 +18,29 @@ export const AddToolModal: React.FC<AddToolModalProps> = ({
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('All');
+  const [tools, setTools] = useState<AITool[]>(CATALOG_TOOLS);
+
+  useEffect(() => {
+    if (isOpen) {
+      api.tools.getAll().then((res) => {
+        if (res.data && res.data.length > 0) {
+          setTools(res.data);
+        }
+      }).catch(() => {});
+    }
+  }, [isOpen]);
 
   if (!isOpen) return null;
 
   const categories = ['All', 'LLM & Reasoning', 'Developer Tools', 'Open Weights', 'Search & Research'];
 
-  const filteredTools = CATALOG_TOOLS.filter((tool) => {
+  const filteredTools = tools.filter((tool) => {
     const matchesSearch =
       tool.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       tool.provider.toLowerCase().includes(searchQuery.toLowerCase()) ||
       tool.primaryUseCase.toLowerCase().includes(searchQuery.toLowerCase());
     const matchesCategory =
-      categoryFilter === 'All' || tool.category === categoryFilter;
+      categoryFilter === 'All' || tool.category === categoryFilter || tool.tag === categoryFilter;
     return matchesSearch && matchesCategory;
   });
 
@@ -38,7 +50,7 @@ export const AddToolModal: React.FC<AddToolModalProps> = ({
         {/* Close button */}
         <button
           onClick={onClose}
-          className="absolute top-6 right-6 text-[#908fa0] hover:text-[#e0e2eb] p-1 rounded-lg hover:bg-white/5 transition-colors"
+          className="absolute top-6 right-6 text-[#908fa0] hover:text-[#e0e2eb] p-1 rounded-lg hover:bg-white/5 transition-colors cursor-pointer"
         >
           <span className="material-symbols-outlined">close</span>
         </button>
@@ -76,7 +88,7 @@ export const AddToolModal: React.FC<AddToolModalProps> = ({
             <button
               key={cat}
               onClick={() => setCategoryFilter(cat)}
-              className={`px-3 py-1 rounded-full text-xs font-semibold whitespace-nowrap transition-colors ${
+              className={`px-3 py-1 rounded-full text-xs font-semibold whitespace-nowrap transition-colors cursor-pointer ${
                 categoryFilter === cat
                   ? 'bg-[#7bd0ff]/20 text-[#7bd0ff] border border-[#7bd0ff]/40'
                   : 'bg-[#191c22] text-[#908fa0] hover:text-white border border-white/5'
@@ -99,58 +111,55 @@ export const AddToolModal: React.FC<AddToolModalProps> = ({
               return (
                 <div
                   key={tool.id}
-                  className={`p-3.5 rounded-xl border transition-all flex items-center justify-between gap-3 ${
-                    isAlreadyAdded
-                      ? 'bg-[#191c22]/50 border-white/5 opacity-70'
-                      : 'bg-[#191c22] border-white/10 hover:border-[#7bd0ff]/40 hover:bg-[#272a31]'
-                  }`}
+                  className="flex items-center justify-between p-3.5 rounded-xl bg-[#191c22] border border-white/5 hover:border-white/10 transition-colors"
                 >
-                  <div className="flex items-center gap-3 min-w-0">
-                    <div className="w-10 h-10 rounded-xl bg-[#32353c] flex items-center justify-center text-[#7bd0ff] shrink-0">
-                      <span className="material-symbols-outlined text-[20px]">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-[#272a31] border border-white/5 flex items-center justify-center text-[#7bd0ff]">
+                      <span className="material-symbols-outlined text-xl">
                         {tool.icon}
                       </span>
                     </div>
-                    <div className="flex flex-col min-w-0">
+                    <div>
                       <div className="flex items-center gap-2">
-                        <span className="font-headline text-[14px] font-semibold text-[#e0e2eb]">
+                        <span className="font-semibold text-[14px] text-[#e0e2eb]">
                           {tool.name}
                         </span>
-                        <span className="font-mono-code text-[11px] text-[#908fa0]">
-                          {tool.provider}
-                        </span>
-                        <span className="px-1.5 py-0.5 rounded font-mono-code text-[10px] bg-[#272a31] text-[#c0c1ff]">
+                        <span className="px-2 py-0.5 rounded font-mono-code text-[10px] bg-[#272a31] text-[#908fa0]">
                           {tool.tag}
                         </span>
                       </div>
-                      <span className="text-[12px] text-[#c7c4d7] truncate mt-0.5 max-w-md">
+                      <p className="text-[12px] text-[#c7c4d7] line-clamp-1">
                         {tool.primaryUseCase}
-                      </span>
+                      </p>
                     </div>
                   </div>
 
                   <div className="flex items-center gap-3 shrink-0">
-                    <div className="flex flex-col text-right">
-                      <span className="font-mono-code text-[12px] text-[#e0e2eb] font-semibold">
+                    <div className="text-right hidden sm:block">
+                      <span className="text-xs font-semibold text-[#e0e2eb] block">
                         {tool.priceMonthly}
                       </span>
-                      <span className="text-[11px] text-[#908fa0]">
-                        SWE {tool.sweBenchScore}%
+                      <span className="font-mono-code text-[10px] text-[#7bd0ff]">
+                        {tool.sweBenchScore > 0 ? `${tool.sweBenchScore}% SWE` : 'Multimodal'}
                       </span>
                     </div>
+
                     <button
                       disabled={isAlreadyAdded}
                       onClick={() => {
                         onSelectTool(tool);
                         onClose();
                       }}
-                      className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                      className={`px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1 transition-all cursor-pointer ${
                         isAlreadyAdded
-                          ? 'bg-[#272a31] text-[#908fa0] cursor-not-allowed'
-                          : 'bg-[#7bd0ff]/20 hover:bg-[#7bd0ff]/30 text-[#7bd0ff] border border-[#7bd0ff]/40'
+                          ? 'bg-[#272a31] text-[#908fa0] cursor-not-allowed opacity-60'
+                          : 'bg-gradient-to-r from-[#00a6e0] to-[#8083ff] text-white shadow hover:opacity-90 active:scale-95'
                       }`}
                     >
-                      {isAlreadyAdded ? 'Active' : '+ Add'}
+                      <span className="material-symbols-outlined text-[14px]">
+                        {isAlreadyAdded ? 'check' : 'add'}
+                      </span>
+                      <span>{isAlreadyAdded ? 'Active' : 'Add'}</span>
                     </button>
                   </div>
                 </div>

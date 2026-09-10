@@ -14,6 +14,7 @@ import { DirectoryView } from './components/DirectoryView';
 import { Footer } from './components/Footer';
 import { INITIAL_TOOLS, CATALOG_TOOLS } from './data/toolsData';
 import { AITool } from './types';
+import api from './lib/api';
 
 export default function App() {
   const [activeTab, setActiveTab] = useState('compare');
@@ -35,6 +36,17 @@ export default function App() {
     setTimeout(() => setToastMessage(null), 3000);
   };
 
+  // Load comparison from server API on mount
+  useEffect(() => {
+    api.compare.get().then((res) => {
+      if (res.data && res.data.length > 0) {
+        setActiveTools(res.data);
+      }
+    }).catch(() => {
+      // Fallback to INITIAL_TOOLS
+    });
+  }, []);
+
   // Keyboard shortcut ⌘K for search
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -54,7 +66,9 @@ export default function App() {
       return;
     }
     const removed = activeTools.find((t) => t.id === id);
-    setActiveTools((prev) => prev.filter((t) => t.id !== id));
+    const updated = activeTools.filter((t) => t.id !== id);
+    setActiveTools(updated);
+    api.compare.remove(id).catch(() => {});
     if (removed) {
       showToast(`Removed ${removed.name} from comparison.`);
     }
@@ -66,7 +80,9 @@ export default function App() {
       showToast(`${tool.name} is already in the comparison.`);
       return;
     }
-    setActiveTools((prev) => [...prev, tool]);
+    const updated = [...activeTools, tool];
+    setActiveTools(updated);
+    api.compare.set(updated.map((t) => t.id)).catch(() => {});
     showToast(`Added ${tool.name} to the comparison matrix.`);
   };
 
@@ -80,21 +96,24 @@ export default function App() {
       return;
     }
 
+    let updated: AITool[];
     if (activeTools.length < 5) {
-      setActiveTools((prev) => [...prev, replacement]);
+      updated = [...activeTools, replacement];
       showToast(`Added ${replacement.name} to the comparison matrix.`);
     } else {
-      // Replace the last item
       const replaced = activeTools[activeTools.length - 1];
-      setActiveTools((prev) => [...prev.slice(0, prev.length - 1), replacement]);
+      updated = [...activeTools.slice(0, activeTools.length - 1), replacement];
       showToast(`Swapped ${replaced.name} with ${replacement.name}.`);
     }
+    setActiveTools(updated);
+    api.compare.set(updated.map((t) => t.id)).catch(() => {});
   };
 
   // Reset to default 4 foundational models
   const handleReset = () => {
     setActiveTools(INITIAL_TOOLS);
     setHighlightDifferences(false);
+    api.compare.set(INITIAL_TOOLS.map((t) => t.id)).catch(() => {});
     showToast('Reset comparison matrix to foundational profiles.');
   };
 

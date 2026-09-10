@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { CATALOG_TOOLS } from '../data/toolsData';
 import { AITool } from '../types';
+import api from '../lib/api';
 
 interface QuickSearchModalProps {
   isOpen: boolean;
@@ -14,6 +15,8 @@ export const QuickSearchModal: React.FC<QuickSearchModalProps> = ({
   onSelectTool,
 }) => {
   const [query, setQuery] = useState('');
+  const [results, setResults] = useState<AITool[]>(CATALOG_TOOLS);
+  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -21,8 +24,6 @@ export const QuickSearchModal: React.FC<QuickSearchModalProps> = ({
         e.preventDefault();
         if (isOpen) {
           onClose();
-        } else {
-          // Open triggered from global hook
         }
       }
       if (e.key === 'Escape' && isOpen) {
@@ -33,15 +34,36 @@ export const QuickSearchModal: React.FC<QuickSearchModalProps> = ({
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [isOpen, onClose]);
 
-  if (!isOpen) return null;
+  useEffect(() => {
+    if (!isOpen) return;
 
-  const results = CATALOG_TOOLS.filter(
-    (t) =>
-      t.name.toLowerCase().includes(query.toLowerCase()) ||
-      t.provider.toLowerCase().includes(query.toLowerCase()) ||
-      t.primaryUseCase.toLowerCase().includes(query.toLowerCase()) ||
-      t.tag.toLowerCase().includes(query.toLowerCase())
-  );
+    const timer = setTimeout(async () => {
+      setLoading(true);
+      try {
+        const res = await api.tools.search(query);
+        if (res.data) {
+          setResults(res.data);
+        }
+      } catch (err) {
+        // Fallback to local filter
+        setResults(
+          CATALOG_TOOLS.filter(
+            (t) =>
+              t.name.toLowerCase().includes(query.toLowerCase()) ||
+              t.provider.toLowerCase().includes(query.toLowerCase()) ||
+              t.primaryUseCase.toLowerCase().includes(query.toLowerCase()) ||
+              t.tag.toLowerCase().includes(query.toLowerCase())
+          )
+        );
+      } finally {
+        setLoading(false);
+      }
+    }, 150);
+
+    return () => clearTimeout(timer);
+  }, [query, isOpen]);
+
+  if (!isOpen) return null;
 
   return (
     <div className="fixed inset-0 z-50 bg-[#0b0e14]/85 backdrop-blur-xl flex items-start justify-center pt-24 p-4">

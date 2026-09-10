@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { AITool } from '../types';
 import { CATALOG_TOOLS } from '../data/toolsData';
+import api from '../lib/api';
 
 interface DirectoryViewProps {
   currentTab: string;
@@ -17,18 +18,70 @@ export const DirectoryView: React.FC<DirectoryViewProps> = ({
 }) => {
   const [search, setSearch] = useState('');
   const [selectedTag, setSelectedTag] = useState('All');
+  const [toolsList, setToolsList] = useState<AITool[]>(CATALOG_TOOLS);
+  const [isLoading, setIsLoading] = useState(false);
+  const [favorites, setFavorites] = useState<Set<string>>(new Set());
 
-  // Filter tools based on current tab
-  let baseTools = [...CATALOG_TOOLS];
-  if (currentTab === 'trending') {
-    baseTools.sort((a, b) => b.sweBenchScore - a.sweBenchScore);
-  } else if (currentTab === 'new-tools') {
-    baseTools = baseTools.slice().reverse();
-  } else if (currentTab === 'deals') {
-    baseTools.sort((a, b) => a.priceRaw - b.priceRaw);
-  }
+  // Fetch tools from the Express REST API
+  useEffect(() => {
+    let isMounted = true;
+    async function loadData() {
+      setIsLoading(true);
+      try {
+        let fetchedTools: AITool[] = [];
+        if (currentTab === 'trending') {
+          const res = await api.tools.getTrending();
+          if (res.data) fetchedTools = res.data;
+        } else if (currentTab === 'new-tools') {
+          const res = await api.tools.getNew();
+          if (res.data) fetchedTools = res.data;
+        } else {
+          const res = await api.tools.getAll({
+            sort: currentTab === 'deals' ? 'priceAsc' : undefined,
+          });
+          if (res.data) fetchedTools = res.data;
+        }
 
-  const filtered = baseTools.filter((t) => {
+        if (isMounted && fetchedTools.length > 0) {
+          setToolsList(fetchedTools);
+        }
+      } catch (err) {
+        console.warn('Using fallback cached catalog:', err);
+      } finally {
+        if (isMounted) setIsLoading(false);
+      }
+    }
+
+    loadData();
+    return () => {
+      isMounted = false;
+    };
+  }, [currentTab]);
+
+  // Load user favorites
+  useEffect(() => {
+    api.favorites.getAll().then((res) => {
+      if (res.data) {
+        setFavorites(new Set(res.data.map((t: any) => t.id)));
+      }
+    }).catch(() => {});
+  }, []);
+
+  const toggleFavorite = async (toolId: string) => {
+    const isFav = favorites.has(toolId);
+    const updated = new Set(favorites);
+    if (isFav) {
+      updated.delete(toolId);
+      setFavorites(updated);
+      await api.favorites.remove(toolId).catch(() => {});
+    } else {
+      updated.add(toolId);
+      setFavorites(updated);
+      await api.favorites.add(toolId).catch(() => {});
+    }
+  };
+
+  const filtered = toolsList.filter((t) => {
     const matchesSearch =
       t.name.toLowerCase().includes(search.toLowerCase()) ||
       t.provider.toLowerCase().includes(search.toLowerCase()) ||
@@ -42,7 +95,7 @@ export const DirectoryView: React.FC<DirectoryViewProps> = ({
       case 'discover':
         return {
           title: 'Explore Computational Intelligence',
-          subtitle: 'Browse 1,840+ indexed neural models, agentic IDEs, and frontier APIs.',
+          subtitle: 'Browse indexed neural models, agentic IDEs, and frontier APIs.',
         };
       case 'categories':
         return {
@@ -81,7 +134,7 @@ export const DirectoryView: React.FC<DirectoryViewProps> = ({
         <div>
           <div className="flex items-center gap-2 mb-2">
             <span className="px-2.5 py-0.5 rounded-full bg-[#272a31] text-[#7bd0ff] font-mono-code text-[11px] uppercase tracking-wider">
-              Directory v2.4
+              Directory v2.4 (Live API)
             </span>
             <span className="text-[#908fa0] text-xs font-mono-code">
               / {filtered.length} Models Displayed
@@ -96,7 +149,7 @@ export const DirectoryView: React.FC<DirectoryViewProps> = ({
         {/* Quick Back to Compare button */}
         <button
           onClick={onGoToCompare}
-          className="flex items-center gap-2 px-4 py-2 rounded-full bg-gradient-to-r from-[#00a6e0] to-[#8083ff] text-white text-xs font-semibold shadow hover:opacity-90 transition-all shrink-0 self-start md:self-auto"
+          className="flex items-center gap-2 px-4 py-2 rounded-full bg-gradient-to-r from-[#00a6e0] to-[#8083ff] text-white text-xs font-semibold shadow hover:opacity-90 transition-all shrink-0 self-start md:self-auto cursor-pointer"
         >
           <span className="material-symbols-outlined text-sm">compare_arrows</span>
           <span>Open Comparison Matrix ({activeTools.length})</span>
@@ -124,7 +177,7 @@ export const DirectoryView: React.FC<DirectoryViewProps> = ({
               <button
                 key={tag}
                 onClick={() => setSelectedTag(tag)}
-                className={`px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-colors ${
+                className={`px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-colors cursor-pointer ${
                   selectedTag === tag
                     ? 'bg-[#7bd0ff]/20 text-[#7bd0ff] border border-[#7bd0ff]/40'
                     : 'bg-[#191c22] text-[#908fa0] hover:text-white border border-white/5'
@@ -137,10 +190,21 @@ export const DirectoryView: React.FC<DirectoryViewProps> = ({
         </div>
       </div>
 
+      {/* Loading state indicator */}
+      {isLoading && (
+        <div className="flex items-center justify-center py-12">
+          <div className="flex items-center gap-3 text-[#7bd0ff] font-mono-code text-xs">
+            <span className="w-2 h-2 rounded-full bg-[#7bd0ff] animate-ping" />
+            <span>Synchronizing model telemetry with Node.js Express API...</span>
+          </div>
+        </div>
+      )}
+
       {/* Tools Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
         {filtered.map((tool) => {
           const isComparing = activeTools.some((t) => t.id === tool.id);
+          const isFav = favorites.has(tool.id);
           return (
             <div
               key={tool.id}
@@ -163,9 +227,24 @@ export const DirectoryView: React.FC<DirectoryViewProps> = ({
                       </span>
                     </div>
                   </div>
-                  <span className="px-2 py-0.5 rounded-full font-mono-code text-[11px] font-medium bg-[#1d2026] text-[#c0c1ff]">
-                    {tool.tag}
-                  </span>
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      onClick={() => toggleFavorite(tool.id)}
+                      className={`p-1.5 rounded-lg border transition-colors cursor-pointer ${
+                        isFav
+                          ? 'bg-[#8083ff]/20 text-[#8083ff] border-[#8083ff]/40'
+                          : 'bg-[#191c22] text-[#908fa0] hover:text-white border-white/5'
+                      }`}
+                      title={isFav ? 'Remove from favorites' : 'Bookmark to favorites'}
+                    >
+                      <span className="material-symbols-outlined text-sm">
+                        {isFav ? 'bookmark' : 'bookmark_border'}
+                      </span>
+                    </button>
+                    <span className="px-2 py-0.5 rounded-full font-mono-code text-[11px] font-medium bg-[#1d2026] text-[#c0c1ff]">
+                      {tool.tag}
+                    </span>
+                  </div>
                 </div>
 
                 <p className="text-[13px] text-[#c7c4d7] leading-relaxed mb-4 line-clamp-2">
@@ -188,19 +267,19 @@ export const DirectoryView: React.FC<DirectoryViewProps> = ({
                   </div>
                   <div>
                     <span className="text-[#908fa0] block">Rating:</span>
-                    <span className="text-[#ddb7ff] font-semibold">★ {tool.rating.toFixed(2)}</span>
+                    <span className="text-[#ddb7ff] font-semibold">★ {Number(tool.rating).toFixed(2)}</span>
                   </div>
                 </div>
               </div>
 
               <div className="flex items-center justify-between pt-3 border-t border-white/5">
                 <span className="text-[12px] text-[#908fa0] truncate max-w-[140px]">
-                  {tool.platforms.split(',')[0]}
+                  {tool.platforms ? tool.platforms.split(',')[0] : 'Web, API'}
                 </span>
 
                 <button
                   onClick={() => onToggleCompare(tool)}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1 transition-all ${
+                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1 transition-all cursor-pointer ${
                     isComparing
                       ? 'bg-[#8083ff]/20 text-[#c0c1ff] border border-[#8083ff]/40 hover:bg-[#8083ff]/30'
                       : 'bg-[#272a31] hover:bg-[#363940] text-white border border-white/10'

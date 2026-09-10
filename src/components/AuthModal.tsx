@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import api from '../lib/api';
 
 interface AuthModalProps {
   isOpen: boolean;
@@ -8,15 +9,38 @@ interface AuthModalProps {
 
 export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onSuccess }) => {
   const [isSignUp, setIsSignUp] = useState(false);
+  const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   if (!isOpen) return null;
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    onSuccess(email);
-    onClose();
+    setLoading(true);
+    setError(null);
+
+    try {
+      if (isSignUp) {
+        const res = await api.auth.register({ email, password, name });
+        if (res.data?.token) {
+          api.setToken(res.data.token);
+        }
+      } else {
+        const res = await api.auth.login({ email, password });
+        if (res.data?.token) {
+          api.setToken(res.data.token);
+        }
+      }
+      onSuccess(email);
+      onClose();
+    } catch (err: any) {
+      setError(err.message || 'Authentication failed. Please check credentials.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -24,7 +48,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onSuccess
       <div className="w-full max-w-md rounded-2xl bg-[#1d2026] border border-white/10 shadow-2xl p-6 md:p-8 relative flex flex-col animate-in fade-in zoom-in-95 duration-200">
         <button
           onClick={onClose}
-          className="absolute top-6 right-6 text-[#908fa0] hover:text-[#e0e2eb] p-1 rounded-lg hover:bg-white/5 transition-colors"
+          className="absolute top-6 right-6 text-[#908fa0] hover:text-[#e0e2eb] p-1 rounded-lg hover:bg-white/5 transition-colors cursor-pointer"
         >
           <span className="material-symbols-outlined">close</span>
         </button>
@@ -44,7 +68,29 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onSuccess
           Access telemetry feeds, benchmark bookmarks, and custom stack configurations.
         </p>
 
+        {error && (
+          <div className="mb-4 p-3 rounded-xl bg-red-500/10 border border-red-500/30 text-red-400 text-xs flex items-center gap-2">
+            <span className="material-symbols-outlined text-sm">error</span>
+            <span>{error}</span>
+          </div>
+        )}
+
         <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+          {isSignUp && (
+            <div>
+              <label className="block text-xs font-semibold text-[#e0e2eb] mb-1.5">
+                Full Name
+              </label>
+              <input
+                type="text"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder="Alex Turing"
+                className="w-full px-3 py-2.5 rounded-lg bg-[#191c22] border border-white/10 text-[#e0e2eb] text-[13px] placeholder:text-[#908fa0] focus:outline-none focus:border-[#7bd0ff]"
+              />
+            </div>
+          )}
+
           <div>
             <label className="block text-xs font-semibold text-[#e0e2eb] mb-1.5">
               Work Email
@@ -75,17 +121,33 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onSuccess
 
           <button
             type="submit"
-            className="mt-2 py-2.5 rounded-xl bg-gradient-to-r from-[#00a6e0] via-[#8083ff] to-[#b76dff] text-white text-xs font-semibold shadow hover:opacity-90 transition-opacity"
+            disabled={loading}
+            className="mt-2 py-2.5 rounded-xl bg-gradient-to-r from-[#00a6e0] via-[#8083ff] to-[#b76dff] text-white text-xs font-semibold shadow hover:opacity-90 transition-opacity flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
           >
-            {isSignUp ? 'Create Account' : 'Continue with Email'}
+            {loading ? (
+              <>
+                <span className="w-3.5 h-3.5 border-2 border-white/40 border-t-white rounded-full animate-spin" />
+                <span>Authenticating...</span>
+              </>
+            ) : (
+              <span>{isSignUp ? 'Create Account' : 'Continue with Email'}</span>
+            )}
           </button>
         </form>
 
-        <div className="mt-6 pt-4 border-t border-white/5 text-center text-[12px] text-[#908fa0]">
+        <div className="mt-4 p-2.5 rounded-lg bg-[#191c22]/50 border border-white/5 text-[11px] font-mono-code text-[#908fa0]">
+          <span>Demo Account: </span>
+          <span className="text-[#7bd0ff]">admin@nexus.ai</span> / <span className="text-[#7bd0ff]">AdminPassword123!</span>
+        </div>
+
+        <div className="mt-4 pt-4 border-t border-white/5 text-center text-[12px] text-[#908fa0]">
           {isSignUp ? 'Already have an account?' : "Don't have an account yet?"}{' '}
           <button
-            onClick={() => setIsSignUp(!isSignUp)}
-            className="text-[#7bd0ff] font-semibold hover:underline ml-1"
+            onClick={() => {
+              setIsSignUp(!isSignUp);
+              setError(null);
+            }}
+            className="text-[#7bd0ff] font-semibold hover:underline ml-1 cursor-pointer"
           >
             {isSignUp ? 'Sign In' : 'Sign Up'}
           </button>

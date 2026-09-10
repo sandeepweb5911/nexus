@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import api from '../lib/api';
 
 interface ToolSubmissionModalProps {
   isOpen: boolean;
@@ -16,19 +17,30 @@ export const ToolSubmissionModal: React.FC<ToolSubmissionModalProps> = ({
   const [domain, setDomain] = useState('Large Language Model');
   const [pricingModel, setPricingModel] = useState('Freemium');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   if (!isOpen) return null;
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
-    setTimeout(() => {
-      setIsSubmitting(false);
+    setError(null);
+    try {
+      await api.submissions.create({
+        name,
+        url,
+        domain,
+        pricingModel,
+      });
       onSubmitSuccess(name);
       setName('');
       setUrl('');
       onClose();
-    }, 600);
+    } catch (err: any) {
+      setError(err.message || 'Submission failed. Please check endpoint fields.');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -53,6 +65,13 @@ export const ToolSubmissionModal: React.FC<ToolSubmissionModalProps> = ({
         <p className="text-[13px] text-[#c7c4d7] mb-6">
           Enter preliminary meta details. Our crawler checks API endpoints within 2 hours.
         </p>
+
+        {error && (
+          <div className="mb-4 p-3 rounded-xl bg-red-500/10 border border-red-500/30 text-red-400 text-xs flex items-center gap-2">
+            <span className="material-symbols-outlined text-sm">error</span>
+            <span>{error}</span>
+          </div>
+        )}
 
         <form onSubmit={handleSubmit} className="flex flex-col gap-4">
           <div>
